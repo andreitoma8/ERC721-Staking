@@ -6,8 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ERC721Staking is ERC721Holder {
+contract ERC721Staking is ERC721Holder, Ownable {
     using SafeERC20 for IERC20;
 
     // Interfaces for ERC20 and ERC721
@@ -91,6 +92,11 @@ contract ERC721Staking is ERC721Holder {
         require(rewards > 0, "You have no rewards to claim");
         stakers[msg.sender].unclaimedRewards = 0;
         rewardsToken.transfer(msg.sender, rewards);
+    }
+
+    // Set the rewardsPerHour variable
+    function setRewardsPerHour(uint256 _newValue) public onlyOwner {
+        rewardsPerHour = _newValue;
     }
 
     //////////
