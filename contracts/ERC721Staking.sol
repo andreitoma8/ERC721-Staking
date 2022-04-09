@@ -10,35 +10,52 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 contract ERC721Staking is ERC721Holder {
     using SafeERC20 for IERC20;
 
+    // Interfaces for ERC20 and ERC721
     IERC20 public rewardsToken;
     IERC721 public nftCollection;
 
+    // Staker info
     struct Staker {
+        // Amount of ERC721 Tokens staked
         uint256 amountStaked;
+        // Last time of details update for this User
         uint256 timeOfLastUpdate;
+        // Calculated, but unclaimed rewards for tus User. The rewards are
+        // calculated each time the user writes to the Smart Contract
         uint256 unclaimedRewards;
     }
 
     // Rewards per hour per token deposited in wei.
+    // Rewards are cumulated once every hour.
     uint256 private rewardsPerHour = 100000;
 
+    // Mapping of User Address to Staker info
     mapping(address => Staker) stakers;
+    // Mapping of Token Id to staker. Made for the SC to remeber
+    // who to send back the ERC721 Token to.
     mapping(uint256 => address) stakerAddress;
 
-    constructor(
-        address _nftCollection,
-        address _rewardsToken
-    ) {
+    // Constructor function
+    constructor(address _nftCollection, address _rewardsToken) {
         nftCollection = IERC721(_nftCollection);
         rewardsToken = IERC20(_rewardsToken);
     }
 
+    // If address already has ERC721 Token/s staked, calculate the rewards.
+    // For every new Token Id in param transferFrom user to this Smart Contract,
+    // increment the amountStaked and map msg.sender to the Token Id of the staked
+    // Token to later send back on withdrawal. Finally give timeOfLastUpdate the
+    // value of now.
     function stake(uint256[] memory _tokenIds) public {
         if (stakers[msg.sender].amountStaked > 0) {
             uint256 rewards = calculateRewards(msg.sender);
             stakers[msg.sender].unclaimedRewards += rewards;
         }
         for (uint256 i; i < _tokenIds.length; ++i) {
+            require(
+                nftCollection.ownerOf(_tokenIds[i]) == msg.sender,
+                "Can't stake tokens you don't own!"
+            );
             nftCollection.transferFrom(msg.sender, address(this), _tokenIds[i]);
             stakers[msg.sender].amountStaked++;
             stakerAddress[_tokenIds[i]] = msg.sender;
@@ -46,14 +63,14 @@ contract ERC721Staking is ERC721Holder {
         stakers[msg.sender].timeOfLastUpdate = block.timestamp;
     }
 
+    // Check if user has any ERC721 Tokens Staked and if he tried to withdraw,
+    // calculate the rewards and store them in the unclaimedRewards and for each
+    // ERC721 Token in param: check if msg.sender is the original staker, decrement
+    // the amountStaked of the user and transfer the ERC721 token back to them.
     function unstake(uint256[] memory _tokenIds) public {
         require(
             stakers[msg.sender].amountStaked > 0,
             "You have no tokens staked"
-        );
-        require(
-            _tokenIds.length <= stakers[msg.sender].amountStaked,
-            "You tried to unstake too many tokens!"
         );
         uint256 rewards = calculateRewards(msg.sender);
         stakers[msg.sender].unclaimedRewards += rewards;
@@ -65,6 +82,9 @@ contract ERC721Staking is ERC721Holder {
         stakers[msg.sender].timeOfLastUpdate = block.timestamp;
     }
 
+    // Calculate rewards for the msg.sender, check if there are any rewards
+    // claim, set unclaimedRewards to 0 and transfer the ERC20 Reward token
+    // to the user.
     function claimRewards() public {
         uint256 rewards = calculateRewards(msg.sender) +
             stakers[msg.sender].unclaimedRewards;
@@ -73,7 +93,9 @@ contract ERC721Staking is ERC721Holder {
         rewardsToken.transfer(msg.sender, rewards);
     }
 
-    // View
+    //////////
+    // View //
+    //////////
 
     function availableRewards(address _user) public view returns (uint256) {
         require(stakers[_user].amountStaked > 0, "User has no tokens staked");
@@ -82,10 +104,13 @@ contract ERC721Staking is ERC721Holder {
         return _rewards;
     }
 
-    
+    /////////////
+    // Internal//
+    /////////////
 
-    // Internal
-
+    // Calculate rewards for param _staker by calculating the time passed
+    // since last update in hours and mulitplying it to ERC721 Tokens Staked
+    // and rewardsPerHour.
     function calculateRewards(address _staker)
         internal
         view
