@@ -21,7 +21,7 @@ contract ERC721Staking is ERC721Holder, Ownable {
         uint256 amountStaked;
         // Last time of details update for this User
         uint256 timeOfLastUpdate;
-        // Calculated, but unclaimed rewards for tus User. The rewards are
+        // Calculated, but unclaimed rewards for the User. The rewards are
         // calculated each time the user writes to the Smart Contract
         uint256 unclaimedRewards;
     }
@@ -68,7 +68,7 @@ contract ERC721Staking is ERC721Holder, Ownable {
     // calculate the rewards and store them in the unclaimedRewards and for each
     // ERC721 Token in param: check if msg.sender is the original staker, decrement
     // the amountStaked of the user and transfer the ERC721 token back to them.
-    function unstake(uint256[] memory _tokenIds) public {
+    function withdraw(uint256[] memory _tokenIds) public {
         require(
             stakers[msg.sender].amountStaked > 0,
             "You have no tokens staked"
@@ -90,6 +90,7 @@ contract ERC721Staking is ERC721Holder, Ownable {
         uint256 rewards = calculateRewards(msg.sender) +
             stakers[msg.sender].unclaimedRewards;
         require(rewards > 0, "You have no rewards to claim");
+        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
         stakers[msg.sender].unclaimedRewards = 0;
         rewardsToken.transfer(msg.sender, rewards);
     }
@@ -103,7 +104,15 @@ contract ERC721Staking is ERC721Holder, Ownable {
     // View //
     //////////
 
-    function availableRewards(address _user) public view returns (uint256) {
+    function userStakeInfo(address _user)
+        public
+        view
+        returns (uint256 _tokensStaked, uint256 _availableRewards)
+    {
+        return (stakers[_user].amountStaked, availableRewards(_user));
+    }
+
+    function availableRewards(address _user) internal view returns (uint256) {
         require(stakers[_user].amountStaked > 0, "User has no tokens staked");
         uint256 _rewards = stakers[_user].unclaimedRewards +
             calculateRewards(_user);

@@ -15,16 +15,14 @@ contract NFTCollection is ERC721, Ownable {
     constructor(string memory _name, string memory _symbol)
         ERC721(_name, _symbol)
     {
-        for (uint256 i; i < 5; i++) {
-            uint256 tokenId = _tokenIdCounter.current();
-            _tokenIdCounter.increment();
-            _safeMint(msg.sender, tokenId);
+        for (uint256 i; i < 6; i++) {
+            mint(msg.sender);
         }
     }
 
-    function mint() public {
+    function mint(address _user) public {
         uint256 tokenId = _tokenIdCounter.current();
         _tokenIdCounter.increment();
-        _safeMint(msg.sender, tokenId);
+        _safeMint(_user, tokenId);
     }
 }

@@ -1,8 +1,10 @@
 # ERC721Staking Smart Contract.
 ### The goal is to create a Smart Contract where users can Stake their ERC721 Tokens and Owner can distribute rewards.
-### This smart contract is not yet tested. Tests coming soon!
+### This smart contract is not audited.
 
 Created using [OpenZeppelin](https://openzeppelin.com/)'s [ERC20](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol) and [ERC721](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC721/ERC721.sol) Smart Contracts.
+
+###### This iteration of a Staking Smart Contract for ERC721 is a separate one, so you will need three SC: one for your ERC721 Collection, one for your ERC20 Token and one for the Staking Pool. You will also have to send the ERC20 Token to the Staking Smart Contract so it will be able to pay rewards for your stakers. In the future I will create a ERC20 extension for ERC721 Staking so users will be able to mint ERC20 Tokens directly from the ERC20 SC based on ERC721 Stake. This will also make the developer job easier by only having to manage two Smart Contracts.
 
 ### Features for users:
 
