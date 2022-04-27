@@ -56,7 +56,7 @@ def test_main():
     )
     # Assert claim rewards
     balance_before_claim = token.balanceOf(owner.address, {"from": owner})
-    cliam_rewards_tx = staking.claimRewards({"from": owner})
+    claim_rewards_tx = staking.claimRewards({"from": owner})
     balance_after_claim = token.balanceOf(owner.address, {"from": owner})
     assert balance_before_claim == balance_after_claim - stake_info_6[1]
     # Assert available rewards after claim

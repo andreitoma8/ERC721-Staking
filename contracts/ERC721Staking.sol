@@ -68,7 +68,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
     // Check if user has any ERC721 Tokens Staked and if he tried to withdraw,
     // calculate the rewards and store them in the unclaimedRewards and for each
     // ERC721 Token in param: check if msg.sender is the original staker, decrement
-    // the amountStaked of the user and transfer the ERC721 token back to them.
+    // the amountStaked of the user and transfer the ERC721 token back to them
     function withdraw(uint256[] calldata _tokenIds) external nonReentrant {
         require(
             stakers[msg.sender].amountStaked > 0,
@@ -79,7 +79,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
         uint256 len = _tokenIds.length;
         for (uint256 i; i < len; ++i) {
             require(stakerAddress[_tokenIds[i]] == msg.sender);
-            stakerAddress[_tokenIds[i]] == address(0);
+            stakerAddress[_tokenIds[i]] = address(0);
             nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
         }
         stakers[msg.sender].amountStaked -= len;
