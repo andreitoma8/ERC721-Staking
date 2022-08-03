@@ -36,6 +36,8 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
     // who to send back the ERC721 Token to.
     mapping(uint256 => address) public stakerAddress;
 
+    address[] public stakersArray;
+
     // Constructor function
     constructor(IERC721 _nftCollection, IERC20 _rewardsToken) {
         nftCollection = _nftCollection;
@@ -51,6 +53,8 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
         if (stakers[msg.sender].amountStaked > 0) {
             uint256 rewards = calculateRewards(msg.sender);
             stakers[msg.sender].unclaimedRewards += rewards;
+        } else {
+            stakersArray.push(msg.sender);
         }
         uint256 len = _tokenIds.length;
         for (uint256 i; i < len; ++i) {
@@ -84,6 +88,12 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
         }
         stakers[msg.sender].amountStaked -= len;
         stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+        for (uint256 i; i < len; ++i) {
+            if (stakersArray[i] == msg.sender) {
+                stakersArray[stakersArray.length - 1] = stakersArray[i];
+                stakersArray.pop();
+            }
+        }
     }
 
     // Calculate rewards for the msg.sender, check if there are any rewards
@@ -99,9 +109,18 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
     }
 
     // Set the rewardsPerHour variable
-    // function setRewardsPerHour(uint256 _newValue) public onlyOwner {
-    //     rewardsPerHour = _newValue;
-    // }
+    // Because the rewards are calculated passively, the owner has to first update the rewards
+    // to all the stakers, witch could result in very heavy load and expensive transactions
+    function setRewardsPerHour(uint256 _newValue) public onlyOwner {
+        address[] memory _stakers = stakersArray;
+        uint256 len = _stakers.length;
+        for (uint256 i; i < len; ++i) {
+            address user = _stakers[i];
+            stakers[user].unclaimedRewards += calculateRewards(user);
+            stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+        }
+        rewardsPerHour = _newValue;
+    }
 
     //////////
     // View //
@@ -116,7 +135,9 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
     }
 
     function availableRewards(address _user) internal view returns (uint256) {
-        require(stakers[_user].amountStaked > 0, "User has no tokens staked");
+        if (stakers[_user].amountStaked == 0) {
+            return stakers[_user].unclaimedRewards;
+        }
         uint256 _rewards = stakers[_user].unclaimedRewards +
             calculateRewards(_user);
         return _rewards;
@@ -134,9 +155,9 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
         view
         returns (uint256 _rewards)
     {
+        Staker memory staker = stakers[_staker];
         return (((
-            ((block.timestamp - stakers[_staker].timeOfLastUpdate) *
-                stakers[msg.sender].amountStaked)
+            ((block.timestamp - staker.timeOfLastUpdate) * staker.amountStaked)
         ) * rewardsPerHour) / 3600);
     }
 }
