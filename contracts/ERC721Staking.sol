@@ -112,7 +112,8 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
 
     // Set the rewardsPerHour variable
     // Because the rewards are calculated passively, the owner has to first update the rewards
-    // to all the stakers, witch could result in very heavy load and expensive transactions
+    // to all the stakers, witch could result in very heavy load and expensive transactions or
+    // even reverting due to reaching the gas limit per block. Redesign incoming to bound loop.
     function setRewardsPerHour(uint256 _newValue) public onlyOwner {
         address[] memory _stakers = stakersArray;
         uint256 len = _stakers.length;
