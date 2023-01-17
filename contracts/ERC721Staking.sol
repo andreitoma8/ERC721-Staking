@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Creator: andreitoma8
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -9,6 +8,19 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
+/**
+ * @title ERC721 Staking Smart Contract
+ *
+ * @author andreitoma8
+ *
+ * @notice This contract uses a simple principle to alow users to stake ERC721 Tokens and earn ERC20 Reward Tokens distributed by the owner of the contract.
+ * Each time a user stakes or withdraws a new Token Id, the contract will store the time of the transaction and the amount of ERC20 Reward Tokens that the user has earned up to that point
+ * (based on the amount of time that has passed since the last transaction, the amount of Tokens staked and the amount of ERC20 Reward Tokens distributed per hour so that the amount of ERC20
+ * Reward Tokens earned by the user is always distributed accounting for how many ERC721 Tokens he has staked at that particular moment.
+ * The user can claim the ERC20 Reward Tokens at any time by calling the claimRewards function.
+ *
+ * @dev The contract is built to be compatible with most ERC721 and ERC20 tokens.
+ */
 contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
