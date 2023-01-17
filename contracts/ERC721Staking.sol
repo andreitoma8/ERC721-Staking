@@ -78,8 +78,9 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @dev Each Token Id must be approved for transfer by the user before calling this function.
      */
     function stake(uint256[] calldata _tokenIds) external whenNotPaused {
-        if (stakers[msg.sender].stakedTokenIds.length > 0) {
-            stakers[msg.sender].unclaimedRewards += calculateRewards(msg.sender);
+        Staker storage staker = stakers[msg.sender];
+        if (staker.stakedTokenIds.length > 0) {
+            staker.unclaimedRewards += calculateRewards(msg.sender);
         } else {
             stakersArray.push(msg.sender);
         }
@@ -91,10 +92,10 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
                 "Can't stake tokens you don't own!"
             );
             nftCollection.transferFrom(msg.sender, address(this), _tokenIds[i]);
-            stakers[msg.sender].stakedTokenIds.push(_tokenIds[i]);
+            staker.stakedTokenIds.push(_tokenIds[i]);
             stakerAddress[_tokenIds[i]] = msg.sender;
         }
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+        staker.timeOfLastUpdate = block.timestamp;
     }
 
     /**
@@ -102,30 +103,31 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @param _tokenIds - The array of Token Ids to withdraw.
      */
     function withdraw(uint256[] calldata _tokenIds) external nonReentrant {
+        Staker storage staker = stakers[msg.sender];
         require(
-            stakers[msg.sender].stakedTokenIds.length > 0,
+            staker.stakedTokenIds.length > 0,
             "You have no tokens staked"
         );
-        stakers[msg.sender].unclaimedRewards += calculateRewards(msg.sender);
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+        staker.unclaimedRewards += calculateRewards(msg.sender);
+        staker.timeOfLastUpdate = block.timestamp;
 
         uint256 lenToWithdraw = _tokenIds.length;
         for (uint256 i; i < lenToWithdraw; ++i) {
             require(stakerAddress[_tokenIds[i]] == msg.sender);
             nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
 
-            uint256 lenStakedTokens = stakers[msg.sender].stakedTokenIds.length;
+            uint256 lenStakedTokens = staker.stakedTokenIds.length;
             for (uint256 j; j < lenStakedTokens; ++j) {
-                if (stakers[msg.sender].stakedTokenIds[j] == _tokenIds[i]) {
-                    stakers[msg.sender].stakedTokenIds[j] = stakers[msg.sender]
-                        .stakedTokenIds[stakers[msg.sender].stakedTokenIds.length - 1];
-                    stakers[msg.sender].stakedTokenIds.pop();
+                if (staker.stakedTokenIds[j] == _tokenIds[i]) {
+                    staker.stakedTokenIds[j] = staker
+                        .stakedTokenIds[staker.stakedTokenIds.length - 1];
+                    staker.stakedTokenIds.pop();
                 }
             }
             delete stakerAddress[_tokenIds[i]];
         }
 
-        if (stakers[msg.sender].stakedTokenIds.length == 0) {
+        if (staker.stakedTokenIds.length == 0) {
             for (uint256 i; i < stakersArray.length; ++i) {
                 if (stakersArray[i] == msg.sender) {
                     stakersArray[i] = stakersArray[stakersArray.length - 1];
@@ -139,11 +141,12 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @notice Function used to claim the accrued ERC20 Reward Tokens.
      */
     function claimRewards() external {
+        Staker storage staker = stakers[msg.sender];
         uint256 rewards = calculateRewards(msg.sender) +
-            stakers[msg.sender].unclaimedRewards;
+            staker.unclaimedRewards;
         require(rewards > 0, "You have no rewards to claim");
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
-        stakers[msg.sender].unclaimedRewards = 0;
+        staker.timeOfLastUpdate = block.timestamp;
+        staker.unclaimedRewards = 0;
         rewardsToken.safeTransfer(msg.sender, rewards);
     }
 
@@ -186,10 +189,11 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @dev This includes both the rewards stored but not claimed and the rewards accumulated since the last update.
      */
     function availableRewards(address _user) internal view returns (uint256) {
-        if (stakers[_user].stakedTokenIds.length == 0) {
-            return stakers[_user].unclaimedRewards;
+        Staker memory staker = stakers[_user];
+        if (staker.stakedTokenIds.length == 0) {
+            return staker.unclaimedRewards;
         }
-        uint256 _rewards = stakers[_user].unclaimedRewards +
+        uint256 _rewards = staker.unclaimedRewards +
             calculateRewards(_user);
         return _rewards;
     }
