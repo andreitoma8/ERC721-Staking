@@ -91,6 +91,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      */
     function stake(uint256[] calldata _tokenIds) external whenNotPaused {
         Staker storage staker = stakers[msg.sender];
+
         if (staker.stakedTokenIds.length > 0) {
             updateRewards(msg.sender);
         } else {
@@ -104,7 +105,9 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
                 nftCollection.ownerOf(_tokenIds[i]) == msg.sender,
                 "Can't stake tokens you don't own!"
             );
+
             nftCollection.transferFrom(msg.sender, address(this), _tokenIds[i]);
+
             staker.stakedTokenIds.push(_tokenIds[i]);
             stakerAddress[_tokenIds[i]] = msg.sender;
         }
@@ -125,7 +128,6 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
         uint256 lenToWithdraw = _tokenIds.length;
         for (uint256 i; i < lenToWithdraw; ++i) {
             require(stakerAddress[_tokenIds[i]] == msg.sender);
-            nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
 
             uint256 lenStakedTokens = staker.stakedTokenIds.length;
             for (uint256 j; j < lenStakedTokens; ++j) {
@@ -136,6 +138,8 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
                 }
             }
             delete stakerAddress[_tokenIds[i]];
+
+            nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
         }
 
         if (staker.stakedTokenIds.length == 0) {
@@ -153,11 +157,14 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      */
     function claimRewards() external {
         Staker storage staker = stakers[msg.sender];
+
         uint256 rewards = calculateRewards(msg.sender) +
             staker.unclaimedRewards;
         require(rewards > 0, "You have no rewards to claim");
+
         staker.timeOfLastUpdate = block.timestamp;
         staker.unclaimedRewards = 0;
+        
         rewardsToken.safeTransfer(msg.sender, rewards);
     }
 
