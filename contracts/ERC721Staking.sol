@@ -80,9 +80,10 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
     function stake(uint256[] calldata _tokenIds) external whenNotPaused {
         Staker storage staker = stakers[msg.sender];
         if (staker.stakedTokenIds.length > 0) {
-            staker.unclaimedRewards += calculateRewards(msg.sender);
+            updateRewards(msg.sender);
         } else {
             stakersArray.push(msg.sender);
+            staker.timeOfLastUpdate = block.timestamp;
         }
         
         uint256 len = _tokenIds.length;
@@ -95,7 +96,6 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
             staker.stakedTokenIds.push(_tokenIds[i]);
             stakerAddress[_tokenIds[i]] = msg.sender;
         }
-        staker.timeOfLastUpdate = block.timestamp;
     }
 
     /**
@@ -108,8 +108,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
             staker.stakedTokenIds.length > 0,
             "You have no tokens staked"
         );
-        staker.unclaimedRewards += calculateRewards(msg.sender);
-        staker.timeOfLastUpdate = block.timestamp;
+        updateRewards(msg.sender);
 
         uint256 lenToWithdraw = _tokenIds.length;
         for (uint256 i; i < lenToWithdraw; ++i) {
@@ -159,12 +158,12 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      */
     function setRewardsPerHour(uint256 _newValue) public onlyOwner {
         address[] memory _stakers = stakersArray;
+
         uint256 len = _stakers.length;
         for (uint256 i; i < len; ++i) {
-            address user = _stakers[i];
-            stakers[user].unclaimedRewards += calculateRewards(user);
-            stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+            updateRewards(_stakers[i]);
         }
+
         rewardsPerHour = _newValue;
     }
 
@@ -188,14 +187,14 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @return _rewards - The available rewards for the user.
      * @dev This includes both the rewards stored but not claimed and the rewards accumulated since the last update.
      */
-    function availableRewards(address _user) internal view returns (uint256) {
+    function availableRewards(address _user) internal view returns (uint256 _rewards) {
         Staker memory staker = stakers[_user];
+
         if (staker.stakedTokenIds.length == 0) {
             return staker.unclaimedRewards;
         }
-        uint256 _rewards = staker.unclaimedRewards +
-            calculateRewards(_user);
-        return _rewards;
+
+        _rewards = staker.unclaimedRewards + calculateRewards(_user);
     }
 
     /**
@@ -210,6 +209,17 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
         Staker memory staker = stakers[_staker];
         return 
         (((((block.timestamp - staker.timeOfLastUpdate) * staker.stakedTokenIds.length)) * rewardsPerHour) / SECONDS_IN_HOUR);
+    }
+
+    /**
+     * @notice Function used to update the rewards for a user.
+     * @param _staker - The address of the user.
+     */
+    function updateRewards(address _staker) internal {
+        Staker storage staker = stakers[_staker];
+
+        staker.unclaimedRewards += calculateRewards(_staker);
+        staker.timeOfLastUpdate = block.timestamp;
     }
 
     /**
