@@ -14,6 +14,7 @@ def test_main():
     nft = NFTCollection.deploy("NFT Collection", "NFTC", {"from": owner})
     staking = ERC721Staking.deploy(nft.address, token.address, {"from": owner})
     # Assert stake
+    nft.mint(owner.address, 5, {"from": owner})
     for i in range(1, 6):
         nft.approve(staking.address, i, {"from": owner})
     stake_tx_1 = staking.stake([1, 2], {"from": owner})
