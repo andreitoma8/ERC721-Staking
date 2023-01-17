@@ -51,6 +51,12 @@ cd ERC721-Staking
 
 - Add a `.env` file with the same contents of `.env.example`, but replaced with your variables.
 
+- Uncomment the last line from the `brownie-config.yaml` file:
+
+```
+dotenv: .env
+```
+
 - Run the command:
 
 ```
