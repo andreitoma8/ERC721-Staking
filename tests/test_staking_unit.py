@@ -1,4 +1,4 @@
-from brownie import NFTCollection, RewardToken, ERC721Staking, accounts, chain
+from brownie import ERC721Staking, NFTCollection, RewardToken, accounts, chain
 
 DECIMALS = 10 ** 18
 HOUR_IN_SECONDS = 3600
@@ -32,7 +32,7 @@ def test_stake():
     mint_and_approve_nft(owner, 2, nft_collection, staking)
     token_holdings = nft_collection.tokensOfOwner(owner)
 
-    staking.stake(token_holdings, {"from": owner})
+    tx = staking.stake(token_holdings, {"from": owner})
 
     owner_stake_info = staking.userStakeInfo(owner)
     assert owner_stake_info[0] == token_holdings
@@ -40,7 +40,7 @@ def test_stake():
     assert staking.stakersArray(0) == owner
 
     owner_staker_struct = staking.stakers(owner.address)
-    assert owner_staker_struct[0] == chain.time()
+    assert owner_staker_struct[0] == tx.timestamp
     assert owner_staker_struct[1] == 0
 
     for token_id in token_holdings:
@@ -115,15 +115,15 @@ def test_withdraw_rewards():
     mint_and_approve_nft(owner, 3, nft_collection, staking)
     token_holdings = nft_collection.tokensOfOwner(owner)
 
-    staking.stake(token_holdings, {"from": owner})
+    tx_0 = staking.stake(token_holdings, {"from": owner})
 
     chain.mine(blocks=10, timedelta=SECONDS_TO_PASS)
 
     reward_token.mint(staking.address, 100 * DECIMALS, {"from": owner})
 
-    staking.claimRewards({"from": owner})
+    tx_1 = staking.claimRewards({"from": owner})
 
-    assert reward_token.balanceOf(owner) == REWARD_PER_HOUR_FOR_ONE_TOKEN * HOURS_TO_PASS * 3
+    assert reward_token.balanceOf(owner) == (tx_1.timestamp - tx_0.timestamp) * REWARD_PER_HOUR_FOR_ONE_TOKEN * len(token_holdings) / HOUR_IN_SECONDS
     assert staking.userStakeInfo(owner)[1] == 0
 
     
