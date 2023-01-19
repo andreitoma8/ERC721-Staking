@@ -132,9 +132,10 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
             uint256 lenStakedTokens = staker.stakedTokenIds.length;
             for (uint256 j; j < lenStakedTokens; ++j) {
                 if (staker.stakedTokenIds[j] == _tokenIds[i]) {
-                    staker.stakedTokenIds[j] = staker
-                        .stakedTokenIds[staker.stakedTokenIds.length - 1];
+                    staker.stakedTokenIds[staker.stakedTokenIds.length - 1] = 
+                        staker.stakedTokenIds[j];
                     staker.stakedTokenIds.pop();
+                    break;
                 }
             }
             delete stakerAddress[_tokenIds[i]];
@@ -147,6 +148,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
                 if (stakersArray[i] == msg.sender) {
                     stakersArray[i] = stakersArray[stakersArray.length - 1];
                     stakersArray.pop();
+                    break;
                 }
             }
         }
