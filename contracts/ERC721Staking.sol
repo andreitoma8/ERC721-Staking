@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// Creator: andreitoma8
 pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -7,160 +6,254 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
-contract ERC721Staking is Ownable, ReentrancyGuard {
+/**
+ * @title ERC721 Staking Smart Contract
+ *
+ * @author andreitoma8
+ *
+ * @notice This contract uses a simple principle to alow users to stake ERC721 Tokens and earn ERC20 Reward Tokens distributed by the owner of the contract.
+ * Each time a user stakes or withdraws a new Token Id, the contract will store the time of the transaction and the amount of ERC20 Reward Tokens that the user has earned up to that point
+ * (based on the amount of time that has passed since the last transaction, the amount of Tokens staked and the amount of ERC20 Reward Tokens distributed per hour so that the amount of ERC20
+ * Reward Tokens earned by the user is always distributed accounting for how many ERC721 Tokens he has staked at that particular moment.
+ * The user can claim the ERC20 Reward Tokens at any time by calling the claimRewards function.
+ *
+ * @dev The contract is built to be compatible with most ERC721 and ERC20 tokens.
+ */
+contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
-    // Interfaces for ERC20 and ERC721
+    /**
+     * @dev The ERC20 Reward Token that will be distributed to stakers.
+     */
     IERC20 public immutable rewardsToken;
+
+    /**
+     * @dev The ERC721 Collection that will be staked.
+     */
     IERC721 public immutable nftCollection;
 
-    // Staker info
+    uint256 constant SECONDS_IN_HOUR = 3600;
+
+    /**
+     * @dev Struct that holds the staking details for each user.
+     */
     struct Staker {
-        // Amount of ERC721 Tokens staked
-        uint256 amountStaked;
-        // Last time of details update for this User
+        /**
+         * @dev The array of Token Ids staked by the user.
+         */
+        uint256[] stakedTokenIds;
+        /**
+         * @dev The time of the last update of the rewards.
+         */
         uint256 timeOfLastUpdate;
-        // Calculated, but unclaimed rewards for the User. The rewards are
-        // calculated each time the user writes to the Smart Contract
+        /**
+         * @dev The amount of ERC20 Reward Tokens that have not been claimed by the user.
+         */
         uint256 unclaimedRewards;
     }
 
-    // Rewards per hour per token deposited in wei.
-    // Rewards are cumulated once every hour.
+    /**
+     * @dev The amount of ERC20 Reward Tokens accrued per hour.
+     */
     uint256 private rewardsPerHour = 100000;
 
-    // Mapping of User Address to Staker info
+    /**
+     * @dev Mapping of stakers to their staking info.
+     */
     mapping(address => Staker) public stakers;
-    // Mapping of Token Id to staker. Made for the SC to remeber
-    // who to send back the ERC721 Token to.
+
+    /** 
+     * @dev Mapping of Token Id to staker address.
+     */
     mapping(uint256 => address) public stakerAddress;
 
+    /**
+     * @dev Array of stakers addresses.
+     */
     address[] public stakersArray;
 
-    // Constructor function
+    /**
+     * @notice Constructor function that initializes the ERC20 and ERC721 interfaces.
+     * @param _nftCollection - The address of the ERC721 Collection.
+     * @param _rewardsToken - The address of the ERC20 Reward Token.
+     */
     constructor(IERC721 _nftCollection, IERC20 _rewardsToken) {
         nftCollection = _nftCollection;
         rewardsToken = _rewardsToken;
     }
 
-    // If address already has ERC721 Token/s staked, calculate the rewards.
-    // For every new Token Id in param transferFrom user to this Smart Contract,
-    // increment the amountStaked and map msg.sender to the Token Id of the staked
-    // Token to later send back on withdrawal. Finally give timeOfLastUpdate the
-    // value of now.
-    function stake(uint256[] calldata _tokenIds) external nonReentrant {
-        if (stakers[msg.sender].amountStaked > 0) {
-            uint256 rewards = calculateRewards(msg.sender);
-            stakers[msg.sender].unclaimedRewards += rewards;
+    /**
+     * @notice Function used to stake ERC721 Tokens.
+     * @param _tokenIds - The array of Token Ids to stake.
+     * @dev Each Token Id must be approved for transfer by the user before calling this function.
+     */
+    function stake(uint256[] calldata _tokenIds) external whenNotPaused {
+        Staker storage staker = stakers[msg.sender];
+
+        if (staker.stakedTokenIds.length > 0) {
+            updateRewards(msg.sender);
         } else {
             stakersArray.push(msg.sender);
+            staker.timeOfLastUpdate = block.timestamp;
         }
+        
         uint256 len = _tokenIds.length;
         for (uint256 i; i < len; ++i) {
             require(
                 nftCollection.ownerOf(_tokenIds[i]) == msg.sender,
                 "Can't stake tokens you don't own!"
             );
+
             nftCollection.transferFrom(msg.sender, address(this), _tokenIds[i]);
+
+            staker.stakedTokenIds.push(_tokenIds[i]);
             stakerAddress[_tokenIds[i]] = msg.sender;
         }
-        stakers[msg.sender].amountStaked += len;
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
     }
 
-    // Check if user has any ERC721 Tokens Staked and if he tried to withdraw,
-    // calculate the rewards and store them in the unclaimedRewards and for each
-    // ERC721 Token in param: check if msg.sender is the original staker, decrement
-    // the amountStaked of the user and transfer the ERC721 token back to them
+    /**
+     * @notice Function used to withdraw ERC721 Tokens.
+     * @param _tokenIds - The array of Token Ids to withdraw.
+     */
     function withdraw(uint256[] calldata _tokenIds) external nonReentrant {
+        Staker storage staker = stakers[msg.sender];
         require(
-            stakers[msg.sender].amountStaked > 0,
+            staker.stakedTokenIds.length > 0,
             "You have no tokens staked"
         );
-        uint256 rewards = calculateRewards(msg.sender);
-        stakers[msg.sender].unclaimedRewards += rewards;
-        uint256 len = _tokenIds.length;
-        for (uint256 i; i < len; ++i) {
+        updateRewards(msg.sender);
+
+        uint256 lenToWithdraw = _tokenIds.length;
+        for (uint256 i; i < lenToWithdraw; ++i) {
             require(stakerAddress[_tokenIds[i]] == msg.sender);
-            stakerAddress[_tokenIds[i]] = address(0);
+
+            uint256 lenStakedTokens = staker.stakedTokenIds.length;
+            for (uint256 j; j < lenStakedTokens; ++j) {
+                if (staker.stakedTokenIds[j] == _tokenIds[i]) {
+                    staker.stakedTokenIds[staker.stakedTokenIds.length - 1] = 
+                        staker.stakedTokenIds[j];
+                    staker.stakedTokenIds.pop();
+                    break;
+                }
+            }
+            delete stakerAddress[_tokenIds[i]];
+
             nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
         }
-        stakers[msg.sender].amountStaked -= len;
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
-        if (stakers[msg.sender].amountStaked == 0) {
+
+        if (staker.stakedTokenIds.length == 0) {
             for (uint256 i; i < stakersArray.length; ++i) {
                 if (stakersArray[i] == msg.sender) {
                     stakersArray[i] = stakersArray[stakersArray.length - 1];
                     stakersArray.pop();
+                    break;
                 }
             }
         }
     }
 
-    // Calculate rewards for the msg.sender, check if there are any rewards
-    // claim, set unclaimedRewards to 0 and transfer the ERC20 Reward token
-    // to the user.
+    /**
+     * @notice Function used to claim the accrued ERC20 Reward Tokens.
+     */
     function claimRewards() external {
+        Staker storage staker = stakers[msg.sender];
+
         uint256 rewards = calculateRewards(msg.sender) +
-            stakers[msg.sender].unclaimedRewards;
+            staker.unclaimedRewards;
         require(rewards > 0, "You have no rewards to claim");
-        stakers[msg.sender].timeOfLastUpdate = block.timestamp;
-        stakers[msg.sender].unclaimedRewards = 0;
+
+        staker.timeOfLastUpdate = block.timestamp;
+        staker.unclaimedRewards = 0;
+        
         rewardsToken.safeTransfer(msg.sender, rewards);
     }
 
-    // Set the rewardsPerHour variable
-    // Because the rewards are calculated passively, the owner has to first update the rewards
-    // to all the stakers, witch could result in very heavy load and expensive transactions or
-    // even reverting due to reaching the gas limit per block. Redesign incoming to bound loop.
+    /**
+     * @notice Function used to set the amount of ERC20 Reward Tokens accrued per hour.
+     * @param _newValue - The new value of the rewardsPerHour variable.
+     * @dev Because the rewards are calculated passively, the owner has to first update the rewards
+     * to all the stakers, witch could result in very heavy load and expensive transactions or
+     * even reverting due to reaching the gas limit per block.
+     */
     function setRewardsPerHour(uint256 _newValue) public onlyOwner {
         address[] memory _stakers = stakersArray;
+
         uint256 len = _stakers.length;
         for (uint256 i; i < len; ++i) {
-            address user = _stakers[i];
-            stakers[user].unclaimedRewards += calculateRewards(user);
-            stakers[msg.sender].timeOfLastUpdate = block.timestamp;
+            updateRewards(_stakers[i]);
         }
+
         rewardsPerHour = _newValue;
     }
 
-    //////////
-    // View //
-    //////////
-
+    /**
+     * @notice Function used to get the info for a user: the Token Ids staked and the available rewards.
+     * @param _user - The address of the user.
+     * @return _stakedTokenIds - The array of Token Ids staked by the user.
+     * @return _availableRewards - The available rewards for the user.
+     */
     function userStakeInfo(address _user)
         public
         view
-        returns (uint256 _tokensStaked, uint256 _availableRewards)
+        returns (uint256[] memory _stakedTokenIds, uint256 _availableRewards)
     {
-        return (stakers[_user].amountStaked, availableRewards(_user));
+        return (stakers[_user].stakedTokenIds, availableRewards(_user));
     }
 
-    function availableRewards(address _user) internal view returns (uint256) {
-        if (stakers[_user].amountStaked == 0) {
-            return stakers[_user].unclaimedRewards;
+    /**
+     * @notice Function used to get the available rewards for a user.
+     * @param _user - The address of the user.
+     * @return _rewards - The available rewards for the user.
+     * @dev This includes both the rewards stored but not claimed and the rewards accumulated since the last update.
+     */
+    function availableRewards(address _user) internal view returns (uint256 _rewards) {
+        Staker memory staker = stakers[_user];
+
+        if (staker.stakedTokenIds.length == 0) {
+            return staker.unclaimedRewards;
         }
-        uint256 _rewards = stakers[_user].unclaimedRewards +
-            calculateRewards(_user);
-        return _rewards;
+
+        _rewards = staker.unclaimedRewards + calculateRewards(_user);
     }
 
-    /////////////
-    // Internal//
-    /////////////
-
-    // Calculate rewards for param _staker by calculating the time passed
-    // since last update in hours and mulitplying it to ERC721 Tokens Staked
-    // and rewardsPerHour.
+    /**
+     * @notice Function used to calculate the rewards for a user.
+     * @return _rewards - The rewards for the user.
+     */
     function calculateRewards(address _staker)
         internal
         view
         returns (uint256 _rewards)
     {
         Staker memory staker = stakers[_staker];
-        return (((
-            ((block.timestamp - staker.timeOfLastUpdate) * staker.amountStaked)
-        ) * rewardsPerHour) / 3600);
+        return 
+        (((((block.timestamp - staker.timeOfLastUpdate) * staker.stakedTokenIds.length)) * rewardsPerHour) / SECONDS_IN_HOUR);
+    }
+
+    /**
+     * @notice Function used to update the rewards for a user.
+     * @param _staker - The address of the user.
+     */
+    function updateRewards(address _staker) internal {
+        Staker storage staker = stakers[_staker];
+
+        staker.unclaimedRewards += calculateRewards(_staker);
+        staker.timeOfLastUpdate = block.timestamp;
+    }
+
+    /**
+     * @dev Pause staking.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @dev Resume staking.
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 }
