@@ -69,6 +69,18 @@ The script will:
 1. Deploy the ERC721 NFT Collection, mint 5 Tokens for yourself and verify the Smart Contract on goerli.etherscan.io.
 1. Deploy the ERC721 Staking Smart Contract and verify it on goerli.etherscan.io.
 
+### Run the tests
+
+Tests might fail or succed on multiple runs without changes because of the way brownie interacts with Ganache, if you want more precise tests I'd recommend working with HardHat.
+
+To run the tests locally make sure you have [Brownie](https://eth-brownie.readthedocs.io/en/stable/install.html) and [Ganache](https://trufflesuite.com/ganache/) installed.
+
+- Runn the command:
+
+```
+brownie test
+```
+
 ##### Any contributions much apreciated!
 
 ##### If this was helpful please consider donating:
