@@ -115,7 +115,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard {
     // to all the stakers, witch could result in very heavy load and expensive transactions or
     // even reverting due to reaching the gas limit per block. Redesign incoming to bound loop.
     function setRewardsPerHour(uint256 _newValue) public onlyOwner {
-        address[] memory _stakers = stakersArray;
+        address[] storage _stakers = stakersArray;
         uint256 len = _stakers.length;
         for (uint256 i; i < len; ++i) {
             address user = _stakers[i];
