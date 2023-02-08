@@ -64,7 +64,7 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      */
     mapping(address => Staker) public stakers;
 
-    /** 
+    /**
      * @dev Mapping of Token Id to staker address.
      */
     mapping(uint256 => address) public stakerAddress;
@@ -73,6 +73,16 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @dev Array of stakers addresses.
      */
     address[] public stakersArray;
+
+    /**
+     * @dev Mapping of stakers addresses to their index in the stakersArray.
+     */
+    mapping(address => uint256) public stakerToArrayIndex;
+
+    /**
+     * @notice Mapping of Token Id to it's index in the staker's stakedTokenIds array.
+     */
+    mapping(uint256 => uint256) public tokenIdToArrayIndex;
 
     /**
      * @notice Constructor function that initializes the ERC20 and ERC721 interfaces.
@@ -96,19 +106,18 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
             updateRewards(msg.sender);
         } else {
             stakersArray.push(msg.sender);
+            stakerToArrayIndex[msg.sender] = stakersArray.length - 1;
             staker.timeOfLastUpdate = block.timestamp;
         }
-        
+
         uint256 len = _tokenIds.length;
         for (uint256 i; i < len; ++i) {
-            require(
-                nftCollection.ownerOf(_tokenIds[i]) == msg.sender,
-                "Can't stake tokens you don't own!"
-            );
+            require(nftCollection.ownerOf(_tokenIds[i]) == msg.sender, "Can't stake tokens you don't own!");
 
             nftCollection.transferFrom(msg.sender, address(this), _tokenIds[i]);
 
             staker.stakedTokenIds.push(_tokenIds[i]);
+            tokenIdToArrayIndex[_tokenIds[i]] = staker.stakedTokenIds.length - 1;
             stakerAddress[_tokenIds[i]] = msg.sender;
         }
     }
@@ -119,38 +128,34 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      */
     function withdraw(uint256[] calldata _tokenIds) external nonReentrant {
         Staker storage staker = stakers[msg.sender];
-        require(
-            staker.stakedTokenIds.length > 0,
-            "You have no tokens staked"
-        );
+        require(staker.stakedTokenIds.length > 0, "You have no tokens staked");
         updateRewards(msg.sender);
 
         uint256 lenToWithdraw = _tokenIds.length;
         for (uint256 i; i < lenToWithdraw; ++i) {
             require(stakerAddress[_tokenIds[i]] == msg.sender);
 
-            uint256 lenStakedTokens = staker.stakedTokenIds.length;
-            for (uint256 j; j < lenStakedTokens; ++j) {
-                if (staker.stakedTokenIds[j] == _tokenIds[i]) {
-                    staker.stakedTokenIds[staker.stakedTokenIds.length - 1] = 
-                        staker.stakedTokenIds[j];
-                    staker.stakedTokenIds.pop();
-                    break;
-                }
+            uint256 index = tokenIdToArrayIndex[_tokenIds[i]];
+            uint256 lastTokenIndex = staker.stakedTokenIds.length - 1;
+            if (index != lastTokenIndex) {
+                staker.stakedTokenIds[index] = staker.stakedTokenIds[lastTokenIndex];
+                tokenIdToArrayIndex[staker.stakedTokenIds[index]] = index;
             }
+            staker.stakedTokenIds.pop();
+
             delete stakerAddress[_tokenIds[i]];
 
             nftCollection.transferFrom(address(this), msg.sender, _tokenIds[i]);
         }
 
         if (staker.stakedTokenIds.length == 0) {
-            for (uint256 i; i < stakersArray.length; ++i) {
-                if (stakersArray[i] == msg.sender) {
-                    stakersArray[i] = stakersArray[stakersArray.length - 1];
-                    stakersArray.pop();
-                    break;
-                }
+            uint256 index = stakerToArrayIndex[msg.sender];
+            uint256 lastStakerIndex = stakersArray.length - 1;
+            if (index != lastStakerIndex) {
+                stakersArray[index] = stakersArray[lastStakerIndex];
+                stakerToArrayIndex[stakersArray[index]] = index;
             }
+            stakersArray.pop();
         }
     }
 
@@ -160,13 +165,12 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
     function claimRewards() external {
         Staker storage staker = stakers[msg.sender];
 
-        uint256 rewards = calculateRewards(msg.sender) +
-            staker.unclaimedRewards;
+        uint256 rewards = calculateRewards(msg.sender) + staker.unclaimedRewards;
         require(rewards > 0, "You have no rewards to claim");
 
         staker.timeOfLastUpdate = block.timestamp;
         staker.unclaimedRewards = 0;
-        
+
         rewardsToken.safeTransfer(msg.sender, rewards);
     }
 
@@ -222,14 +226,12 @@ contract ERC721Staking is Ownable, ReentrancyGuard, Pausable {
      * @notice Function used to calculate the rewards for a user.
      * @return _rewards - The rewards for the user.
      */
-    function calculateRewards(address _staker)
-        internal
-        view
-        returns (uint256 _rewards)
-    {
+    function calculateRewards(address _staker) internal view returns (uint256 _rewards) {
         Staker memory staker = stakers[_staker];
-        return 
-        (((((block.timestamp - staker.timeOfLastUpdate) * staker.stakedTokenIds.length)) * rewardsPerHour) / SECONDS_IN_HOUR);
+        return (
+            ((((block.timestamp - staker.timeOfLastUpdate) * staker.stakedTokenIds.length)) * rewardsPerHour)
+                / SECONDS_IN_HOUR
+        );
     }
 
     /**
