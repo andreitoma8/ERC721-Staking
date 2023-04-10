@@ -2,9 +2,9 @@
 
 ### Smart Contract where users can Stake their ERC721 Tokens and Owner can distribute rewards.
 
-### A previous version of this Smart Contract recieved a free exploratory audit by Marco form [Paladin Blockchain Security](https://paladinsec.co). All audit notes and issues can be found in their raw form over [here](https://gist.github.com/JorgeAtPaladin/cbbdd568925c3d86645509814f02ea32).
+### You can find a new and better version of a ERC721 Staking Contract with Dynamic Rewards and the option to set fixed Staking Periods and Staking Rewards in my new Repository: [Synthetix ERC721 Staking](https://github.com/andreitoma8/Synthetix-ERC721-Staking). I recommend using this one.
 
-All issues and recommendations were addressed.
+A previous version of this Smart Contract recieved a free exploratory audit by Marco form [Paladin Blockchain Security](https://paladinsec.co). All audit notes and issues can be found in their raw form over [here](https://gist.github.com/JorgeAtPaladin/cbbdd568925c3d86645509814f02ea32). - All issues and recommendations were addressed.
 
 Created using [OpenZeppelin](https://openzeppelin.com/)'s [ERC20](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol) and [ERC721](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC721/ERC721.sol) Smart Contracts.
 
